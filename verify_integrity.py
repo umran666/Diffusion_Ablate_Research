@@ -58,13 +58,13 @@ def main():
         sys.exit(1)
     print("  ✓ Bit-for-bit twin synchronicity verified.")
 
-    # 2. Check Structural Section Presence (Sections 1 through 24)
+    # 2. Check Structural Section Presence (Sections 1 through 25)
     with open(md_file, "r", encoding="utf-8") as f:
         content = f.read()
 
-    print(f"[CHECK 2/3] Structural Section Verification (1..24):")
+    print(f"[CHECK 2/3] Structural Section Verification (1..25):")
     missing_sections = []
-    for sec_num in range(1, 25):
+    for sec_num in range(1, 26):
         # Look for ## <num>. or # <num>.
         pattern = rf"(?m)^##?\s+{sec_num}\.\s+"
         if not re.search(pattern, content):
