@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+message: "If you use this research repository or build upon these theoretical derivations, please cite it as below."
+authors:
+  - family-names: "Umran"
+    given-names: "Shaik"
+  - name: "Diffusion Ablation Research Collaboration Group"
+title: "Mathematical Foundations, Geometric Subspace Surgery, and Empirical Verification for Representation Ablation in Diffusion and Flow-Matching DiTs"
+version: 1.0.0
+date-released: 2026-10-29
+repository-code: "https://github.com/umran666/Diffusion_Ablate_Research"
+keywords:
+  - "diffusion models"
+  - "flow matching"
+  - "representation ablation"
+  - "subspace surgery"
+  - "diffusion transformers"
+  - "ideogram"
+  - "flux"
+  - "stable diffusion"
