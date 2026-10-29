@@ -56,15 +56,15 @@ def main():
         print("[FAIL] research_finds.md and research_finds do not match!", file=sys.stderr)
         print("Run `python verify_integrity.py --sync` to synchronize them.", file=sys.stderr)
         sys.exit(1)
-    print("  ✓ Bit-for-bit twin synchronicity verified.")
+    print("  [OK] Bit-for-bit twin synchronicity verified.")
 
-    # 2. Check Structural Section Presence (Sections 1 through 25)
+    # 2. Check Structural Section Presence (Sections 1 through 26)
     with open(md_file, "r", encoding="utf-8") as f:
         content = f.read()
 
-    print(f"[CHECK 2/3] Structural Section Verification (1..25):")
+    print(f"[CHECK 2/3] Structural Section Verification (1..26):")
     missing_sections = []
-    for sec_num in range(1, 26):
+    for sec_num in range(1, 27):
         # Look for ## <num>. or # <num>.
         pattern = rf"(?m)^##?\s+{sec_num}\.\s+"
         if not re.search(pattern, content):
@@ -73,7 +73,7 @@ def main():
     if missing_sections:
         print(f"[FAIL] Missing required sections: {missing_sections}", file=sys.stderr)
         sys.exit(1)
-    print("  ✓ All 24 core sections are present and properly numbered.")
+    print("  [OK] All core sections (1..26) are present and properly numbered.")
 
     # 3. Check Mathematical Formatting
     print(f"[CHECK 3/3] Mathematical Syntax Balance Check:")
@@ -81,7 +81,7 @@ def main():
     if display_math_count % 2 != 0:
         print(f"[FAIL] Unbalanced display math ($$) blocks detected! Count={display_math_count}", file=sys.stderr)
         sys.exit(1)
-    print(f"  ✓ Display math blocks ($$) are balanced ({display_math_count // 2} blocks found).")
+    print(f"  [OK] Display math blocks ($$) are balanced ({display_math_count // 2} blocks found).")
 
     print("\n[SUCCESS] All integrity and provenance checks passed cleanly!")
     sys.exit(0)
