@@ -3059,3 +3059,27 @@ The empirical results provide unequivocal confirmation of the theoretical predic
   - `drugs_substance_ablated.png`: SHA256 prefix `78fc41c6208c5422`
   - `benign_landscape_ablated.png`: SHA256 prefix `ba7c6e321e7d51d1`
   - `benign_portrait_ablated.png`: SHA256 prefix `b76d4acec9b65d94`
+
+
+---
+
+### 28.6 Theoretical Review & Scientific Critique (Codex gpt-6.1-sol & OpenCode Synthesis)
+
+In accordance with our frontier AI interpretability protocol, the empirical findings of Section 28 were subjected to independent theoretical scrutiny using Codex (`gpt-6.1-sol`, `sensitive_verification_codex.md`) and the OpenCode research suite.
+
+#### 1. Algebraic Properties of the Rank-1 Edit
+For unit vector $v$, the linear projection operator in column-vector convention yields:
+$$W^* = W(I - v v^\top), \quad W^* x = W x - (W v)(v^\top x)$$
+The perturbation $\Delta W = - (W v) v^\top = - u v^\top$ is strictly of **rank at most one**.
+Codex noted that while $\text{rank}(\Delta W) \le 1$, a rank-1 parameter perturbation propagates through a 34-block nonlinear denoiser $\dot{x}_t = v_\theta(x_t, t, z)$, where even 1D linear interventions in high dimensions ($53,248 \to 4,608$) can induce substantial behavioral reorganizations if $v$ aligns with an amplified feature direction.
+
+#### 2. Mechanistic Plausibility of the Single-Direction Refusal Channel
+The observation that 6 distinct safety domains responded simultaneously to the elimination of $v$ is consistent with a linear representation:
+$$x = s + \alpha v$$
+where $s \in \mathbb{R}^{53248}$ encodes benign scene structure (lighting, geometry, color palette) and $\alpha \in \mathbb{R}$ represents the scalar magnitude of refusal activation injected by late layers (Layers 27–35) of the text encoder. Removing $\alpha v$ preserves the underlying scene projection $W s$ while zeroing the destructive interference vector $W (\alpha v) = \alpha u$. This provides an architectural diffusion analog to the single-direction refusal phenomenon established in autoregressive language models ([Arditi et al., 2024](https://arxiv.org/abs/2406.11717)).
+
+#### 3. Rigorous Evidentiary Boundaries
+To maintain rigorous scientific standards, Codex highlighted key distinctions between supported findings and broader claims:
+- **Supported by Evidence**: The rank-1 edit $W^*$ produces a dramatic visual recovery on the explicit nudity prompt ($\sigma^2: 130.38 \to 4030.58$, 31-fold recovery, accompanied by a 4.65-fold file size increase), transitioning the output from a degenerate gray card to a fully textured photorealistic image.
+- **Benign Sensitivity**: Benign controls exhibited minor variance shifts ($-28.5\%$ on landscape, $-20.4\%$ on portrait) with low distribution drift ($D_{\text{KL}} \le 1.42$), confirming that while the visual structure remains recognizable, nonlinear denoisers experience subtle global contrast adjustments when adapter rank-1 modes are removed.
+- **Scope of Uncensorship**: True comprehensive uncensorship across all potential edge cases would require extensive multi-seed red-teaming across automated refusal evaluation suites (e.g. SafeBench, AdvBench-Diffusion). Within the empirical test suite evaluated here, Gateway Adapter Nullification successfully eliminated all observed refusal artifacts.
