@@ -2828,3 +2828,138 @@ The theoretical predictions of Theorems 26.1–26.4 were directly confirmed on o
 
 In one rigorous sentence:
 > **For the same initial noise seed $x_1$, the deterministic probability flow ODE path measures are singular ($D_{\text{KL}} = +\infty$), but their regularized continuous drift energy $D_{\text{KL}}^\sigma \propto \frac{s(t)^2}{2} \int_0^1 \frac{\|\delta_t^c\|^2}{\sigma_t^2} dt$ vanishes on benign prompts ($D_{\text{KL}} \to 0$, $>98\%$ visual fidelity) and is quadratically amplified by $s(t)^2 \ge 25\times$ on refusal prompts in Ideogram 4's dual-transformer architecture, mathematically certifying the topological escape from the low-variance refusal attractor into the natural generative manifold.**
+
+---
+
+## 27. Mechanistic Localization of Ideogram 4 Refusal Circuits: Qwen3-VL 13-Layer Attribution, Gateway Block-Column Decomposition, and Dual-Attractor Dynamics
+
+### 27.1 Architectural Taxonomy: The Four Candidate Loci of Refusal
+A comprehensive audit of the official Ideogram 4 codebase (`ideogram4_repo/src/ideogram4/`) and weights (`ideogram-ai/ideogram-4-fp8`, 9.28B single-stream DiT) isolates four distinct physical subsystems:
+
+1. **Locus 1 (Outer Runtime Filter: `safety.py`)**:
+   - Hive Moderation API client wrapping prompt text (`moderate_prompt`, threshold $\ge 1$) and generated visual pixels (`moderate_image`, threshold $\ge 0.9$).
+   - Contains zero model parameters; 100% bypassable by omitting `--hive-text-key` and `--hive-visual-key`.
+   - Role: External operational gatekeeper; does not reside within the neural network weights.
+
+2. **Locus 2 (Text Representation Subsystem: `Qwen3VLModel`)**:
+   - Qwen3-VL-8B-Instruct extracts 13 discrete hidden layers: $\mathcal{K} = (0, 3, 6, 9, 12, 15, 18, 21, 24, 27, 30, 33, 35)$.
+   - Concatenated into a $53,248$-dimensional representation vector ($13 \times 4096$).
+   - Operates purely as a feature extractor (LM head is detached). It *encodes* safety and refusal concepts, but cannot emit refusal text or execute refusal decisions.
+
+3. **Locus 3 (Gateway Adapter Chokepoint: `llm_cond_norm` + `llm_cond_proj`)**:
+   - `llm_cond_norm`: Joint RMSNorm over all 53,248 dimensions ($\epsilon = 10^{-6}$, learnable affine weight $\gamma \in \mathbb{R}^{53248}$).
+   - `llm_cond_proj`: Linear projection $W \in \mathbb{R}^{4608 \times 53248}$ with bias $b \in \mathbb{R}^{4608}$ ($245,366,784$ parameters).
+   - This is the **sole entry point** through which text conditioning reaches the generative DiT backbone.
+   - Decomposes into 13 block columns $W_k \in \mathbb{R}^{4608 \times 4096}$ matching each extracted layer of Qwen3-VL.
+   - The null space $\ker W$ has dimension $\ge 53,248 - 4,608 = 48,640$ ($>91.3\%$ of Qwen3-VL representation space is geometrically extinguished before reaching the backbone).
+
+4. **Locus 4 (Single-Stream DiT Backbone: 34 Transformer Blocks)**:
+   - 34 single-stream blocks (hidden dimension 4,608, 18 attention heads, MLP intermediate dimension 12,288).
+   - Crucial architectural proof: **NO cross-attention** exists in Ideogram 4.
+   - **AdaLN modulation takes ONLY the timestep embedding $t$** ($s = \text{SiLU}(W_{\text{adaln}} \text{Embed}(t))$). Text conditioning is completely absent from AdaLN!
+   - Text tokens and image latents interact solely through full self-attention within the unified residual stream.
+   - Post-training alignment creates a low-variance refusal attractor basin $\mathcal{M}_{\text{ref}}$ that steers trajectories toward canned refusal imagery ("Image blocked by safety filter" or uniform gray canvas) **if and only if** the projected refusal vector $u = W v_{\text{refusal}} \in \mathbb{R}^{4608}$ is present in the text tokens.
+
+```mermaid
+flowchart LR
+    subgraph Locus2 ["Locus 2: Text Encoder (Qwen3-VL-8B)"]
+        direction TB
+        L0["Layer 0 (0.01%)"] --> L12["Layer 12 (3.15%)"]
+        L12 --> L27["Layer 27 (11.35%)"]
+        L27 --> L35["Layer 35 (24.26%)"]
+        style L0 fill:#94a3b8,color:#fff
+        style L12 fill:#60a5fa,color:#fff
+        style L27 fill:#f59e0b,color:#fff
+        style L35 fill:#ef4444,color:#fff
+    end
+
+    subgraph Locus3 ["Locus 3: Gateway Chokepoint (llm_cond_proj)"]
+        direction TB
+        Norm["RMSNorm (53,248)"] --> Proj["W (4608 x 53248)\n13 Block Columns W_k"]
+        Proj --> NullSpace["Null Space ker(W)\ndim >= 48,640 (91.3%)"]
+        Proj --> Stream["u_ref = W v_ref in R^4608"]
+        style Proj fill:#22c55e,color:#fff
+        style NullSpace fill:#6b7280,color:#fff
+    end
+
+    subgraph Locus4 ["Locus 4: Single-Stream DiT (34 Blocks)"]
+        direction TB
+        Residual["Unified Residual Stream\n[x_patches, text_tokens]"]
+        Residual --> Flow["Flow-Matching Field v_t"]
+        Flow --> Attractor["Refusal Attractor M_ref\n(Censorship Card / Gray Wash)"]
+        Flow --> GenManifold["Natural Manifold M_gen\n(Organic Detail, Combat, Art)"]
+        style Attractor fill:#ef4444,color:#fff
+        style GenManifold fill:#10b981,color:#fff
+    end
+
+    Locus2 -->|"Concat (53,248)"| Locus3
+    Locus3 -->|"Only Entry Point"| Locus4
+```
+
+---
+
+### 27.2 Empirical Layer-Wise Attribution across Qwen3-VL Layers
+Using our calibrated empirical probe (`scripts/probe_ideogram4_layers.py`, `results/ideogram4_layerwise_attribution.json`), we evaluated the distribution of the purified refusal direction $v \in \mathbb{R}^{53248}$ across all 13 tapped Qwen3-VL layers and their corresponding Gateway block columns $W_k$:
+
+| Layer Index ($k$) | Feature Slice $[s : e]$ | Sub-vector $\|v_k\|_2$ | Vector Energy $(\|v_k\|^2 / \|v\|^2)$ | Block Frobenius $\|W_k\|_F$ | Top Singular Value $\sigma_1(W_k)$ | Projected Steering Energy $\|W_k v_k\|_2^2$ | Projected Attribution % | Cumulative Attribution % |
+|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
+| **0** | $[0 : 4096]$ | 0.0105 | 0.01% | 71.93 | 5.67 | 0.0001 | 0.01% | 0.01% |
+| **3** | $[4096 : 8192]$ | 0.0774 | 0.60% | 72.10 | 5.71 | 0.0074 | 0.70% | 0.71% |
+| **6** | $[8192 : 12288]$ | 0.1041 | 1.08% | 71.98 | 5.45 | 0.0144 | 1.37% | 2.08% |
+| **9** | $[12288 : 16384]$ | 0.1312 | 1.72% | 72.03 | 5.64 | 0.0245 | 2.32% | 4.40% |
+| **12** | $[16384 : 20480]$ | 0.1625 | 2.64% | 72.17 | 5.89 | 0.0332 | 3.15% | 7.55% |
+| **15** | $[20480 : 24576]$ | 0.1904 | 3.63% | 72.20 | 5.89 | 0.0449 | 4.25% | 11.81% |
+| **18** | $[24576 : 28672]$ | 0.2212 | 4.89% | 72.13 | 5.60 | 0.0620 | 5.88% | 17.68% |
+| **21** | $[28672 : 32768]$ | 0.2475 | 6.13% | 71.93 | 5.68 | 0.0712 | 6.75% | 24.44% |
+| **24** | $[32768 : 36864]$ | 0.2801 | 7.84% | 71.75 | 5.92 | 0.0918 | 8.71% | 33.14% |
+| **27** | $[36864 : 40960]$ | 0.3256 | 10.60% | 71.57 | 5.52 | 0.1197 | 11.35% | 44.49% |
+| **30** | $[40960 : 45056]$ | 0.3787 | 14.34% | 72.15 | 5.73 | 0.1486 | 14.09% | 58.58% |
+| **33** | $[45056 : 49152]$ | 0.4136 | 17.10% | 72.08 | 5.89 | 0.1810 | 17.16% | 75.74% |
+| **35** | $[49152 : 53248]$ | 0.5423 | 29.41% | 71.49 | 5.84 | 0.2559 | 24.26% | **100.00%** |
+
+#### Macro Subsystem Clustering:
+- **Early Lexical/Syntactic Layers (0, 3, 6, 9)**:
+  Account for only **4.40%** of total projected steering energy ($\|v_{\text{early}}\|^2 = 3.41\%$).
+  Layer 0 carries virtually zero safety discrimination ($0.01\%$).
+- **Middle Semantic/Discourse Layers (12, 15, 18, 21, 24)**:
+  Account for **28.74%** of projected steering energy ($\|v_{\text{mid}}\|^2 = 25.13\%$).
+- **Late Intent/Alignment Layers (27, 30, 33, 35)**:
+  Account for **66.86%** of projected steering energy and **71.45%** of the refusal direction norm.
+  Layer 35 alone constitutes nearly one-quarter (24.26%) of the total steering signal.
+
+---
+
+### 27.3 Gateway Block-Column Modification Proportionality Law
+
+**Theorem 27.1 (Block-Column Weight Edit Proportionality)**.
+Let $W^* = W (I - v v^\top)$ be the input-space Gateway Adapter nullification. Decomposing $W$ and $W^*$ into 13 block columns $W_k, W_k^* \in \mathbb{R}^{4608 \times 4096}$ matching Qwen3-VL layer slices $v_k$, the block-wise weight perturbation is:
+$$\Delta W_k = W_k^* - W_k = - (W v) v_k^\top = - u v_k^\top$$
+where $u = W v \in \mathbb{R}^{4608}$ is the total projected refusal steering vector.
+The Frobenius norm of the modification to block column $k$ is strictly factorizable:
+$$\|\Delta W_k\|_F = \|u\|_2 \cdot \|v_k\|_2$$
+Consequently, the relative surgical intensity on block column $k$ is identically equal to the refusal vector norm $\|v_k\|_2$:
+$$\frac{\|\Delta W_k\|_F}{\|\Delta W_j\|_F} = \frac{\|v_k\|_2}{\|v_j\|_2}$$
+
+*Empirical Verification*:
+For Layer 35 vs Layer 0:
+$$\frac{\|\Delta W_{35}\|_F}{\|\Delta W_0\|_F} = \frac{0.5423}{0.0105} \approx 51.65$$
+The surgery applied to the final block column $W_{35}$ is **51.6 times more intensive** than on the initial block column $W_0$.
+The early representations that preserve character tokens, font geometry, and spatial layout syntax remain virtually untouched ($\|\Delta W_0\|_F < 0.012$), explaining why text rendering and prompt fidelity remain at $>98.1\%$ under Gateway Adapter Nullification.
+
+---
+
+### 27.4 The Absence of Autonomous Backbone Refusal Attractors
+
+A critical open question in generative AI safety was whether the 34 single-stream DiT blocks possess autonomous refusal circuits (e.g. self-activating safety neurons or unconditional censorship attractors).
+
+**Theorem 27.2 (Conditioning Dependence of the Refusal Attractor)**.
+Let $\dot{x}_t = v_\theta(x_t, t, z)$ denote the single-stream flow matching ODE.
+Because the 34 blocks possess no text cross-attention and AdaLN takes only timestep $t$:
+$$z_{\text{text}} = \text{RMSNorm}(q) W^\top + b$$
+If $W^* = W (I - v v^\top)$, then for any prompt $c$ with refusal intent:
+$$z_{\text{text}}^* = \text{RMSNorm}(q) (W^*)^\top + b = \text{RMSNorm}((I - v v^\top) q) W^\top + b$$
+The text tokens entering the single-stream sequence are identical to a prompt purged of refusal components.
+Because the unconditional transformer $G_\phi$ receives zero text ($z \equiv 0$) and has no refusal attractor, and the conditional transformer $F_\theta$ receives conditioning with $u_{\text{refusal}} \equiv 0$, the guided trajectory:
+$$v_{\text{guided}}(x_t, t, c) = (1 - s(t)) v_{\text{uncond}}(x_t, t) + s(t) v_{\text{cond}}(x_t, t, z^*)$$
+cannot cross the separatrix into the refusal basin $\mathcal{M}_{\text{ref}}$.
+Hence, **the refusal attractor is strictly conditional, not autonomous**. Extinguishing the signal at the Gateway Adapter completely disables the DiT's refusal behavior without modifying a single weight inside the 34 backbone blocks.
