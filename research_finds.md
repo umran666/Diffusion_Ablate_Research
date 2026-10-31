@@ -3398,3 +3398,9 @@ guarantees that before training begins, the adapted model is 100% byte-for-byte 
    - Retain Loss was tightly bounded ($\le 0.12$).
    - Holdout Validation Retain Drift was maintained at $0.01148$.
    - Backbone parameters remained 100% frozen.
+
+
+### FlowRepair Empirical Verification (2026-10-31)
+- Validated FlowRepair training loop: edit loss reduced, retain loss bounded, benign generation preserved.
+- Dual-model audit completed via OpenCode ARS and OpenAI Codex (gpt-6.1-sol).
+- Zero-init, token-masking, and Frobenius penalty verified across full test battery.
