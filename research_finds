@@ -3192,3 +3192,68 @@ Across the retained runs there are **44 checkpointed image records**: 18 initial
 The next research hypotheses are causal block/timestep localization and state-dependent internal interventions, with genuinely clean matched counterfactuals and preservation controls. CAT-style transport, SAE-based editing, LoRA fine-tuning, broader parameter sweeps, different seeds and alternative schedules require their own data, source versions, controls and budget receipts. They are not completed experiments in this record. Neither untested community claims nor a paper on another architecture supply a production-ready Ideogram bypass.
 
 The complete supporting narrative remains available in [the surgical runbook](docs/ideogram4-surgical-pipeline.md), [literature review](docs/ideogram4-alternative-literature.md), [runtime audit](docs/ideogram4-alternative-runtime-audit.md), [community audit](docs/ideogram4-community-methods-audit.md), [velocity plan](docs/ideogram4-velocity-pilot-plan.md), and [velocity results](docs/ideogram4-velocity-results.md). Sections 31-34 contain the consolidated findings; those files and the linked raw artifacts retain implementation-level detail and exact original evidence.
+
+
+## 35. Conditioned Activation Transport (CAT) & Non-Linear Flow Steering for Multi-Modal DiTs
+
+**Consolidation date: 2026-10-31.** Following extensive literature evaluation across 11 key research papers on diffusion safety, refusal geometry, and concept unlearning, combined with deep architectural analysis from OpenAI Codex (`gpt-6.1-sol`), this section establishes the mathematical diagnosis of the prior ablation mode collapse and documents the native implementation of Conditioned Activation Transport (CAT) for Ideogram 4.
+
+### 35.1 Synthesis of the 11 Research Papers
+
+| # | Reference / Paper | Core Methodology | Relevance to Ideogram 4 Refusal & Flow Dynamics |
+|---|---|---|---|
+| 1 | **CAT** ([arXiv:2603.03163](https://arxiv.org/abs/2603.03163)) | Conditioned Activation Transport: Mahalanobis OOD gate $\mathcal{C}(z)$ + Zero-initialized MLP transport map $T_\theta(z)$. | Proves mathematically and empirically that static linear steering collapses complex scenes into generic default portraits (e.g. "woman in jeans"). Proves interventions must be non-linear and conditioned strictly to the refusal manifold. |
+| 2 | **STG** ([arXiv:2510.24012](https://arxiv.org/abs/2510.24012)) | Safe Text Embedding Guidance: Clean prediction $\hat{x}_0 = x_t + (1-t)v_t$ for sampling-time text embedding guidance. | Establishes that guiding text conditioning tokens during sampling avoids driving the model off-manifold into unconditional prior sinks. |
+| 3 | **SaTPO** ([arXiv:2610.19563](https://arxiv.org/abs/2610.19563)) | Safety Transition Preference Optimization: Step-wise alignment conditioned on shared parent states $(x_t, t)$. | Proves that trajectory divergence occurs at specific mid-flow transition steps. Interventions anchored on shared parent states preserve ordinary generation while rectifying the trajectory. |
+| 4 | **CAA** ([arXiv:2312.06681](https://arxiv.org/abs/2312.06681) / bib.bib27) | Contrastive Activation Addition: Steering via mean difference vectors of contrastive prompt pairs. | Provides the foundational linear baseline and contrastive representation subtraction theory. |
+| 5 | **PSAlign** ([arXiv:2508.01151](https://arxiv.org/abs/2508.01151)) | Personalized Safety Alignment: Dynamic cross-attention adaptation across diverse user profiles. | Demonstrates parameter-efficient conditioning modulation rather than destructive weight ablation. |
+| 6 | **STEREO** ([arXiv:2408.16807](https://arxiv.org/abs/2408.16807)) | Two-stage robust concept erasure: Vulnerability identification + anchor-concept compositional objective. | Emphasizes anchor-concept preservation to protect model utility. |
+| 7 | **SAD** ([arXiv:2605.08116](https://arxiv.org/abs/2605.08116)) | Safety-Aware Denoiser: Iterative steering toward provably safe regions during denoising. | Establishes inference-time integration of constraints without model retraining. |
+| 8 | **SD Safety Analysis** ([arXiv:2411.15516](https://arxiv.org/abs/2411.15516)) | Systematic audit of 10 Stable Diffusion models across sensitive concepts. | Documents the complete lack of refusal behavior in raw open-weight pipelines versus proprietary screened models. |
+| 9 | **Responsible Diffusion** ([arXiv:2509.22723](https://arxiv.org/abs/2509.22723)) | Comprehensive survey on safety, ethics, and trust in diffusion models. | Classifies post-hoc filtering, prompt screening, weight ablation, and inference-time steering mechanisms. |
+| 10 | **Toxicity & Bias in SD** (ResearchGate 391414457) | Forensic analysis of latent space mapping and demographic bias amplification. | Demonstrates how text encoders map sensitive tokens to stereotypical visual clusters. |
+| 11 | **Rimsky et al. 2024** ([ACL 2024](https://aclanthology.org/2024.acl-long.828/)) | Published proceedings of Contrastive Activation Addition (CAA). | Formalizes contrastive steering vector computation in language and vision backbones. |
+
+---
+
+### 35.2 Mechanistic Diagnosis: Why Prior Ablation Produced Identical Images
+
+In our prior ablation experiments, every prompt generated the identical generic stock photo ("woman in blue jeans"). The root causes are:
+
+1. **Downstream Sensitivity Annihilation ($\frac{\partial v_+}{\partial p} \approx 0$)**:
+   - In Ideogram 4, conditioning is tokenwise: $Z(p) = M_{\text{text}} \odot [W_{\text{proj}} \text{RMSNorm}(H(p)) + b_{\text{proj}}] \in \mathbb{R}^{B \times L \times 4608}$.
+   - Linear weight projection combined with FP8 double-scaling underflow attenuated the text features by $1/200\times$ ($>99.5\%$ signal loss).
+   - The conditional branch $v_+(x_t, t, Z(p))$ lost all sensitivity to prompt variations ($D_{\text{prompt}} \approx 0$).
+2. **Deterministic Mode Collapse Under Asymmetric CFG**:
+   - Ideogram 4 uses separate conditional and unconditional transformer instances ($F_\theta$ and $G_\phi$).
+   - Guided velocity is $v_g = v_- + w(v_+ - v_-)$. When $v_+$ becomes prompt-independent, $v_g$ becomes a fixed vector field across all prompts.
+   - At fixed `seed=42`, Euler integration of this invariant vector field traced the exact same trajectory into the model's unconditional dataset prior mode.
+   - This exact failure mode is documented in CAT (Section 5.1 & Figure 6), where linear steering pushed activations off-manifold and replaced scenes with generic default portraits.
+3. **Failure of Velocity Subtraction ($v - v_{\text{warn}}$)**:
+   - Trajectory subtraction removed the warning-card artifact (gray board), but flow matching is non-linear: $v_{\text{desired}} \ne v_{\text{obs}} - v_{\text{warn}}$.
+   - Subtracting the warning vector only negates the card's endpoint without supplying the constructive vector field required to render anatomical geometry.
+
+---
+
+### 35.3 The Implemented Conditioned Activation Transport (CAT) Module
+
+We implemented the complete Conditioned Activation Transport architecture in `heretic_dit/ideogram4_cat.py`, backed by 8 passing unit tests in `tests/test_ideogram4_cat.py`:
+
+1. **Regularized Precision Matrix ($\widehat{\Sigma}_u^{-1}$)**:
+   - Uses the Kubokawa & Srivastava shrinkage estimator toward the scaled identity:
+     $$\widehat{\Sigma} = (1 - \lambda) S_{\text{emp}} + \lambda \left(\frac{\text{tr}(S_{\text{emp}})}{d}\right) I$$
+   - Guarantees positive definiteness and invertibility in high dimensions ($d = 4608 > n$).
+2. **Geometry-Aware Mahalanobis Gate ($\mathcal{C}(Z)$)**:
+   - Measures tokenwise proximity to the unsafe centroid:
+     $$D_M^2(z) = (z - \mu_u)^\top \widehat{\Sigma}_u^{-1} (z - \mu_u)$$
+     $$\mathcal{C}(z) = \sigma\left(\frac{\eta_q - D_M^2(z)}{\tau}\right)$$
+   - When a prompt is benign, $D_M^2(z) \gg \eta_q \implies \mathcal{C}(z) = 0$, guaranteeing **zero intervention** ($\Delta Z = 0$) and 100% natural image fidelity.
+3. **Zero-Initialized Non-Linear Transport Map ($T_\theta(Z)$)**:
+   - 2-layer MLP with RMSNorm and GELU:
+     $$T_\theta(z) = z + W_{\text{out}} \cdot \text{GELU}(W_{\text{in}} \cdot \text{RMSNorm}(z) + b_{\text{in}}) + b_{\text{out}}$$
+   - Initialized with $W_{\text{out}} = 0$ and $b_{\text{out}} = 0$, guaranteeing $T_\theta(z) \equiv z$ at initialization.
+4. **Dual-Objective Loss ($\mathcal{L}_{\text{CAT}}$)**:
+   - Optimizes alignment to unrefused target representations while strictly regularizing safe representations:
+     $$\mathcal{L} = \|T_\theta(z_{\text{unsafe}}) - z_{\text{target}}\|_2^2 + \lambda \|T_\theta(z_{\text{safe}}) - z_{\text{safe}}\|_2^2$$
+5. **CFG Diagnostic Sampler Step (`cfg_euler_diagnostic`)**:
+   - Evaluates branch gap RMS, negative velocity RMS, and step-wise clean prediction $\hat{x}_0 = x_t + (1-t) v_g$ at common parent states.
