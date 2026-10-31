@@ -3410,3 +3410,39 @@ guarantees that before training begins, the adapted model is 100% byte-for-byte 
 - Validated FlowRepair training loop: edit loss reduced, retain loss bounded, benign generation preserved.
 - Dual-model audit completed via OpenCode ARS and OpenAI Codex (gpt-6.1-sol).
 - Zero-init, token-masking, and Frobenius penalty verified across full test battery.
+
+
+---
+
+## 38. Empirical Model Verification: Safety Concept Erasure vs. Refusal Abliteration and Mode Collapse Realities
+
+**Consolidation date: 2026-10-31.** Ground-truth empirical audit across live hardware deployments (NVIDIA A10G & A100-80GB GPUs via Modal) and mechanistic evaluations across Stable Diffusion 1.5, PixArt-$\alpha$, FLUX.1-schnell, SD 3.5, and Ideogram 4.
+
+### 38.1 Empirical Ground-Truth Across Architectures
+
+| Architecture | Paradigm | Hardware & Weights | Empirical Outcome | Quantitative Evidence |
+| :--- | :--- | :--- | :--- | :--- |
+| **Stable Diffusion 1.5** | Concept Erasure | Modal A10G (Real Weights) | **SUCCESS** | **$5.92\times$ Selectivity Ratio**. Nudity $L_1 = 0.155$ ($r = 0.696$); Dog $L_1 = 0.029$ ($r = 0.978$); Dog CLIP $0.326 \to 0.325$. |
+| **PixArt-$\alpha$** | Concept Erasure | Modal A10G (Real Weights) | **SUCCESS on $W_v$, COLLAPSE on $W_k$** | $W_v$ preserves visual layout ($LPIPS = 0.088$). $W_k$ shifts non-linear softmax exponent, collapsing into gray noise ($LPIPS = 0.838$). |
+| **FLUX.1-schnell** | Concept Erasure | Modal A100 (Real Weights) | **SUCCESS** | **$-32.1\%$ Suppression** ($p < 10^{-4}$), breaking single-stream bottleneck via dual-path surgery (`context` + `linear_1`). |
+| **Ideogram 4** | Gateway Ablation | Modal A100 (Real Weights) | **FAILED (Mode Collapse)** | All prompts collapsed into the **woman in jeans** default prior mode ($r \in [0.254, 0.284]$). |
+| **Ideogram 4** | Velocity Pilot | Modal A100 (Real Weights) | **FAILED (Card Remains)** | Target prompt produced warning card across all conditions (`assessment.json`: `"status": "original_recovery_goal_not_achieved"`). |
+| **Ideogram 4** | FlowRepair | Modal A100 Container | **CODE & CACHE VERIFIED** | 162 tensors cached into persistent volume (`exit_code: 0`); native Euler nodes discretized. |
+
+---
+
+### 38.2 Detailed Findings & Mechanistic Insights
+
+#### 1. Concept Erasure vs. Refusal Abliteration
+A fundamental distinction emerged from empirical testing:
+- **Concept Erasure** (removing concepts from open models): Highly successful via closed-form subspace projection on linear cross-attention Value weights ($W_v$) and dual-path conditioning layers.
+- **Refusal Abliteration** (reversing an internal refusal attractor to recover photographic anatomy): Fails when using naive gateway nullification or trajectory subtraction, because zeroing the gateway kills prompt sensitivity ($\frac{\partial v_+}{\partial p} \to 0$) and subtraction leaves a vacuum in the velocity field.
+
+#### 2. The Ideogram 4 Mode Collapse Audit
+Evaluating the 16 generated PNGs from `results/sensitive_samples/` using OpenAI's `clip-vit-large-patch14`:
+- Base model only refused photographic nudity (standard deviation $\sigma = 11.5$, uniform gray card reading `"Image blocked by safety filter"`).
+- Weapons, firearms, combat, horror, and illicit substances were generated freely by the base weights ($CLIP \in [0.228, 0.281]$); refusal for those domains was handled externally by Hive APIs (`--hive-text-key`).
+- Gateway-ablated weights collapsed to the woman in jeans ($CLIP = 0.254\text{--}0.284$ against the peasant blouse & denim jeans probe) across all 8 prompts, confirming prompt death.
+
+#### 3. Modal Cloud Execution
+Containerized execution on Modal verified that `flow_repair_benchmark.py` accurately reproduces the native `V4_DEFAULT_20` Euler scheduler and discrete node intervals, successfully caching all 162 tensors across `fit` and `calibration` splits into persistent storage.
