@@ -3404,3 +3404,9 @@ guarantees that before training begins, the adapted model is 100% byte-for-byte 
 - Validated FlowRepair training loop: edit loss reduced, retain loss bounded, benign generation preserved.
 - Dual-model audit completed via OpenCode ARS and OpenAI Codex (gpt-6.1-sol).
 - Zero-init, token-masking, and Frobenius penalty verified across full test battery.
+
+
+### FlowRepair Empirical Verification (2026-10-31)
+- Validated FlowRepair training loop: edit loss reduced, retain loss bounded, benign generation preserved.
+- Dual-model audit completed via OpenCode ARS and OpenAI Codex (gpt-6.1-sol).
+- Zero-init, token-masking, and Frobenius penalty verified across full test battery.
