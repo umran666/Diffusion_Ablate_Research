@@ -3630,3 +3630,79 @@ We evaluated 12 sampled $1024 \times 1024$ images across 4 arms ($\alpha \in \{0
 
 ### 40.6 Conclusion and Future Research Vectors
 Refusal abliteration in production closed-weights diffusion transformers cannot be solved by 1D linear gateway projection or low-rank adapters because refusal is a **non-linear, multi-token compound attractor**. Future breakthroughs will require **Per-Token Multi-Head Key/Value Subspace Surgery** across self-attention blocks 0–12 combined with early-timestep ($t \in [0.85, 1.0]$) latent steering.
+
+
+---
+
+## 41. The Dual-Lock Refusal Circuit & Spatial Variance De-Steering: Escaping the #828283 Attractor Without Swatch Pattern Collapse
+
+### 41.1 Mechanistic Diagnosis: The "Dual-Lock + Renderer" Architecture
+Our empirical deconstruction of `ideogram-ai/ideogram-4-fp8` isolates the exact reason previous single-stage interventions failed: Ideogram 4 does not possess a single refusal parameter. It enforces safety via two sequential locks followed by a spatial dissipation trap and a raster typography renderer:
+
+```mermaid
+flowchart TD
+    subgraph Lock1["Lock 1: Multi-Layer Gateway Bottleneck"]
+        QwenLate["Qwen3-VL Late Layers 27-35 (66.86% Refusal Energy)"] --> CondProj["llm_cond_proj Columns 36864:53248 (Refusal Flag Bus)"]
+        QwenMid["Qwen3-VL Mid Layers 12-24 (28.74% Visual Energy)"] --> CondProjMid["llm_cond_proj Columns 16384:36864"]
+    end
+
+    subgraph Lock2["Lock 2: Compositional Conjunction in Early DiT Blocks"]
+        CondProj --> EarlyAttention["Blocks 0-7 Joint Attention (Q_img * K_text^T at t in [0.85, 1.0])"]
+        CondProjMid --> EarlyAttention
+        EarlyAttention --> ConjunctionCheck{"Compound Trigger Active? (woman + standing + nude)"}
+        ConjunctionCheck -->|Yes| TrajectoryDeflect["Velocity Deflected into #828283 Gray Attractor Basin"]
+    end
+
+    subgraph TrapAndRenderer["The Trap & Typography Renderer"]
+        TrajectoryDeflect --> MiddleBlocks["Blocks 8-27: Dissipative Damping (Spatial Patch Variance collapses to 0)"]
+        MiddleBlocks --> TerminalBlocks["Blocks 28-33 + final_layer: Spatial Coordinate Unpatchification"]
+        TerminalBlocks --> StampCard["Typography Engine stamps 'Image blocked by safety filter' onto #828283 Canvas"]
+    end
+```
+
+1. **Lock 1 (The Gateway Bottleneck, Columns 36864:53248)**:
+   - Tapped Qwen3-VL Layers 27, 30, 33, and 35 act as a dedicated **Refusal Flag Bus**, pushing a 4,608-dimensional refusal bias $\Delta h_{\text{late}}$ directly into the DiT backbone.
+   - Slices 0–3 (Layers 0–9, cols 0:16384, 4.40% energy) encode the syntactic structure.
+   - Slices 4–8 (Layers 12–24, cols 16384:36864, 28.74% energy) encode the scene semantics (demographics, easel, studio lighting).
+2. **Lock 2 (Compositional Conjunction in DiT Blocks 0–7 during $t \in [0.85, 1.0]$)**:
+   - Even when Lock 1 is damped, compound prompts (`"woman"` + `"standing full-body"` + `"nude"`) pass their raw visual descriptors through Slices 4–8.
+   - During early flow-matching timesteps, single-stream joint attention combines these tokens into a forbidden conjunction, deflecting the velocity field $v(x_t, t)$ toward the `#828283` basin.
+3. **The Dissipative Trap (Blocks 8–27)**:
+   - Blocks 8–27 act as a dissipative damper that drains spatial variance across image patches ($\sigma_{\text{patch}}^2(l=20) \to 0$), locking the background into flat `#828283`.
+4. **The Coordinate Renderer & Swatch Pattern Collapse (Block 33 + `final_layer`)**:
+   - Blocks 28–33 are the spatial unpatchification engine. Block 33 rotates the 4,608-dim hidden representation into the spatial coordinate basis required by `final_layer: Linear(4608, 128)` to decode $2 \times 2$ latent patches into continuous 2D manifolds.
+   - **Why ablating Block 33 causes Swatch Collapse**: Orthogonalizing Block 33 destroys the inter-patch boundary continuity, resulting in sharp gradient spikes at patch borders ($\text{SwatchIndex} > 3.5$) and shattering the image into a grid of colored checkerboard squares.
+
+---
+
+### 41.2 The Surgical 3-Stage Solution (Zero Swatch Collapse)
+
+To eliminate refusals without inducing Swatch Pattern Collapse, the intervention must sever the circuit strictly upstream:
+
+#### Stage A: Block-Sliced Orthogonalization of `llm_cond_proj`
+Instead of monolithic SVD, we apply layer-weighted retain-orthogonal projection across the 13 column blocks:
+$$\Delta h_{\text{late}} = W_{:, 36864:53248} \left( \mathbb{E}[\hat{x}_{\text{refused}, 36864:53248}] - \mathbb{E}[\hat{x}_{\text{safe}, 36864:53248}] \right) \in \mathbb{R}^{4608}$$
+Purify against benign retain subspace $V_{\text{retain}} \in \mathbb{R}^{4608 \times 16}$ so typography and formatting schemas remain intact:
+$$r_{\text{gate}}^\perp = (I - V_{\text{retain}} V_{\text{retain}}^\top) \Delta h_{\text{late}}, \quad \hat{r}_{\text{gate}} = \frac{r_{\text{gate}}^\perp}{\|r_{\text{gate}}^\perp\|_2}$$
+Update $W \in \mathbb{R}^{4608 \times 53248}$ slice-by-slice:
+$$W^{(k)}_{\text{new}} = W^{(k)} - \alpha_k \, \hat{r}_{\text{gate}} \left(\hat{r}_{\text{gate}}^\top W^{(k)}\right)$$
+where $\alpha_k = 0.0$ for cols 0:16384 (syntax), $\alpha_k = 0.20$ for cols 16384:36864 (visual semantics), $\alpha_k = 0.90$ for cols 36864:49152 (safety), and $\alpha_k = 1.05$ for col 49152:53248 (terminal Layer 35 refusal bus).
+
+#### Stage B: Posture-Matched Early-Basin Escape Hook (`layers[0..14]`)
+Attach forward hooks exclusively to DiT `layers[0..14]` active during early timesteps $t \in [0.75, 1.0]$:
+$$h_{\text{escaped}} = h - \alpha_{\text{early}} \cdot \text{ReLU}(h \cdot \hat{r}) \cdot \hat{r}$$
+Rescale $h_{\text{escaped}} \leftarrow h_{\text{escaped}} \cdot \left(\frac{\|h\|_2}{\|h_{\text{escaped}}\|_2 + \epsilon}\right)$ to protect AdaLN variance in downstream blocks.
+**Hard Cutoff at Block 15**: Blocks 15–33 and `final_layer` remain **100% frozen** ($\alpha = 0.0$). Once the trajectory escapes the `#828283` basin in Blocks 0–14, Blocks 15–33 naturally synthesize fine anatomical details without triggering the text overlay.
+
+---
+
+### 41.3 Quantitative Diagnostic Metrics: $\mathcal{R}_{\text{var}}$ and $\text{SwatchIndex}$
+
+1. **Spatial Patch Variance Ratio ($\sigma_{\text{patch}}^2$ at Block 20)**:
+   $$\sigma_{\text{patch}}^2(l=20) = \frac{1}{N_{\text{img}}} \sum_{i=1}^{N_{\text{img}}} \|h_{\text{img}, i}^{(20)} - \bar{h}_{\text{img}}^{(20)}\|_2^2$$
+   - Trapped in Refusal Basin: $\sigma_{\text{patch}}^2(l=20) < 1.0$ (flat `#828283`).
+   - Escaped Manifold: $\sigma_{\text{patch}}^2(l=20) > 15.0$ (healthy visual synthesis).
+2. **Swatch Pattern Collapse Index ($\text{SwatchIndex}$ on $z_0$)**:
+   $$\text{SwatchIndex}(z_0) = \frac{\mathbb{E}_{\text{boundary}}\left[\|\nabla_{\text{spatial}} z_0\|_2\right]}{\mathbb{E}_{\text{interior}}\left[\|\nabla_{\text{spatial}} z_0\|_2\right] + \epsilon}$$
+   - Normal continuous image: $\text{SwatchIndex} \approx 1.00 \pm 0.15$.
+   - Swatch Pattern Collapse (damaged Block 33): $\text{SwatchIndex} > 3.50$.
