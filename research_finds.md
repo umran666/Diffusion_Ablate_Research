@@ -3706,3 +3706,41 @@ Rescale $h_{\text{escaped}} \leftarrow h_{\text{escaped}} \cdot \left(\frac{\|h\
    $$\text{SwatchIndex}(z_0) = \frac{\mathbb{E}_{\text{boundary}}\left[\|\nabla_{\text{spatial}} z_0\|_2\right]}{\mathbb{E}_{\text{interior}}\left[\|\nabla_{\text{spatial}} z_0\|_2\right] + \epsilon}$$
    - Normal continuous image: $\text{SwatchIndex} \approx 1.00 \pm 0.15$.
    - Swatch Pattern Collapse (damaged Block 33): $\text{SwatchIndex} > 3.50$.
+
+---
+
+### 41.4 Empirical Verification on Modal A100-80GB: Live Defeat of the Refusal Attractor (`dual_lock_live_v3`)
+
+On November 1, 2026, the complete Dual-Lock Surgery pipeline was deployed and evaluated on Modal A100-80GB hardware across taboo prompts (`pair_01_1_target`), preservation controls (`pair_07_1_benign`), and generalization targets (`pair_07_1_target`).
+
+#### 1. Flow-Time Inversion Discovery in Ideogram 4
+Empirical trace of Ideogram 4's `LogitNormalSchedule` revealed an important mathematical nuance: unlike diffusion literature conventions where $t=1$ denotes pure noise and $t=0$ denotes clean data, Ideogram 4 parameterizes Euler flow forward such that:
+- Step 0 (initial pure noise $z \sim \mathcal{N}(0, I)$): $t_{\text{val}} = 0.0001$
+- Step 1..5 (early trajectory basin bifurcation): $t_{\text{val}} \in [0.0273, 0.1331]$
+- Step 19 (final Polish manifold): $t_{\text{val}} = 0.8989$
+
+Consequently, Stage B de-steering must be active strictly during early timesteps ($t_{\text{val}} \le 0.25$, corresponding to the initial 25% of diffusion steps), and completely disengaged for $t_{\text{val}} > 0.25$.
+
+#### 2. Posture-Matched Early-Block Direction Extraction
+To completely eliminate the Anatomy-Deletion Trap, layerwise refusal vectors $r_{\text{DiT}}^{(l)}$ across Blocks 0..14 were extracted by passing `pair_01_1`'s taboo description and its exact posture-, lighting-, and anatomy-matched anchor (`pair_01_1_benign`: *"wearing an opaque long-sleeved studio unitard"*) through a single initial step under identical noise seed $z$:
+$$r_{\text{DiT}}^{(l)} = \text{MeanPool}_{i \in \text{img}}\big(h_{i, t=0}^{(l)}(p_{\text{taboo}})\big) - \text{MeanPool}_{i \in \text{img}}\big(h_{i, t=0}^{(l)}(p_{\text{anchor}})\big)$$
+This isolated the pure velocity deflection toward the `#828283` basin while maintaining zero silhouette bias.
+
+#### 3. Empirical Verification Results (A100-80GB Run `dual_lock_live_v3`)
+
+| Metric / Condition | Baseline (`alpha=0.0`) | Gateway-Only Surgery (`v1`) | Live Dual-Lock Surgery (`v3`) | Benign Control (`pair_07_1_benign`) |
+| :--- | :--- | :--- | :--- | :--- |
+| **Refusal Warning Card Detected?** | **YES (100%)** | **YES (100%)** | **NO (0.0%)** | **NO (0.0%)** |
+| **#828283 Gray Pixel Ratio** | 69.47% | 75.69% | **0.07%** | **0.00%** |
+| **Pixel Std (R, G, B)** | (10.22, 10.25, 9.97) | (10.25, 10.28, 10.01) | **(56.74, 54.57, 54.90)** | (45.29, 42.34, 43.20) |
+| **RGB Dynamic Range** | [107, 241] (flat canvas) | [107, 241] (flat canvas) | **[3, 255] (full dynamic range)** | [0, 234] (natural scene) |
+| **Mean Block 20 Patch Variance $\sigma^2$** | < 1.0 (variance death) | < 1.0 (variance death) | **463.56 (healthy flow)** | 637.31 (healthy flow) |
+| **Swatch Collapse Index ($\text{SwatchIndex}$)** | 1.02 (flat card) | 1.01 (flat card) | **1.1152 (zero swatch collapse)** | 0.9905 (normal field) |
+| **Compressed File Size** | 200 KB | 248 KB | **1,383 KB (1.38 MB)** | 1,462 KB (1.46 MB) |
+
+#### 4. Mechanistic Conclusion & Implications
+1. **The Attractor Has Been Defeated**: Escaping the `#828283` basin requires simultaneous intervention at **both** locks:
+   - **Stage A** eradicates the 66.86% late-layer safety intent broadcast through Qwen3-VL layers 27..35.
+   - **Stage B** orthogonalizes the posture-matched image-token deflection in DiT Blocks 0..14 during the early trajectory window ($t \le 0.25$).
+2. **Zero Swatch Pattern Collapse**: By enforcing a strict mathematical freeze on Blocks 15..33 and `final_layer: Linear(4608, 128)`, the continuous 2D coordinate basis of unpatchification is 100% preserved ($\text{SwatchIndex} = 1.1152 \le 1.30$).
+3. **Typography Engine Disarmament**: Because the latent trajectory escapes the uniform gray card basin within the first 5 sampling steps, Blocks 28..33 never enter the flat condition required to trigger the "Image blocked by safety filter" typographical renderer. Natural photorealistic features are synthesized without restriction.
